@@ -1,0 +1,110 @@
+---
+description: Java 后端编码规范
+globs: backend/**/*.java
+alwaysApply: false
+---
+
+# Java 后端编码规范
+
+## Lombok 使用
+- 实体类使用 `@Getter`, `@Setter`, `@Builder`, `@NoArgsConstructor`, `@AllArgsConstructor`
+- Service 类使用 `@RequiredArgsConstructor` 和 `@Slf4j`
+- Controller 使用 `@RequiredArgsConstructor`
+
+```java
+// ✅ GOOD
+@Entity
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class TradePlan {
+    // ...
+}
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TradeService {
+    private final TradePlanRepository tradePlanRepository;
+}
+```
+
+## BigDecimal 使用规范
+- 金额常量使用字符串构造：`new BigDecimal("1000000")`
+- 计算时指定精度和舍入模式：`.divide(diff, 4, RoundingMode.HALF_UP)`
+- 比较使用 `compareTo()`，不使用 `equals()`
+
+```java
+// ✅ GOOD
+BigDecimal rr = reward.divide(risk, 4, RoundingMode.HALF_UP);
+if (rr.compareTo(MIN_RR) < 0) {
+    throw new DisciplineException("盈亏比不足");
+}
+
+// ❌ BAD
+double rr = reward / risk;
+if (rr < 1.5) { // 精度问题
+    throw new DisciplineException("盈亏比不足");
+}
+```
+
+## 异常处理
+- 业务异常继承 `RuntimeException`
+- 使用 `@ControllerAdvice` 统一处理异常
+- 异常消息使用中文，清晰说明问题
+
+```java
+// ✅ GOOD
+@ControllerAdvice
+public class GlobalExceptionHandler {
+    @ExceptionHandler(DisciplineException.class)
+    public ResponseEntity<Map<String, Object>> handleDisciplineException(DisciplineException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("message", e.getMessage());
+        return ResponseEntity.badRequest().body(body);
+    }
+}
+```
+
+## 事务管理
+- 写操作使用 `@Transactional`
+- 只读操作使用 `@Transactional(readOnly = true)`
+- 异步操作使用 `@Async`，不阻塞主流程
+
+```java
+// ✅ GOOD
+@Transactional
+public TradePlanResponse createTradePlan(CreateTradePlanRequest request) {
+    // 创建交易计划
+}
+
+@Async
+public void reviewTradeAsync(TradeExecution execution) {
+    // 异步 AI 分析
+}
+```
+
+## 日志记录
+- 使用 `@Slf4j` 和 `log` 对象
+- 关键操作记录日志：创建计划、平仓、AI 分析
+- 错误日志包含异常堆栈
+
+```java
+// ✅ GOOD
+log.info("创建交易计划: stockSymbol={}, direction={}", request.stockSymbol(), request.direction());
+log.error("AI 分析失败", e);
+```
+
+## 验证注解
+- DTO 使用 `@Valid` 和 Bean Validation 注解
+- Controller 方法参数使用 `@Valid @RequestBody`
+
+```java
+// ✅ GOOD
+@PostMapping
+public TradePlanResponse createPlan(@Valid @RequestBody CreateTradePlanRequest request) {
+    // ...
+}
+```

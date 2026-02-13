@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tradermind
+    username: tradermind
+    password: tradermind
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+  application:
+    name: tradermind-backend
+  # Spring Boot DevTools 配置
+  devtools:
+    restart:
+      enabled: true  # 启用自动重启
+      # 排除不需要重启的文件
+      exclude: static/**,public/**,templates/**,META-INF/maven/**,META-INF/resources/**
+    livereload:
+      enabled: true  # 启用 LiveReload（需要浏览器插件）
+
+server:
+  port: 8080
+  address: 0.0.0.0  # 监听所有网络接口，允许局域网访问
+
+# AI API 配置（OpenAI 或 Dify）
+ai:
+  api:
+    url: https://api.openai.com/v1/chat/completions
+    key: YOUR_API_KEY_HERE
+  model: gpt-4.1-mini
+
+logging:
+  level:
+    com.tradermind: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN

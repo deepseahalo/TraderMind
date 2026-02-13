@@ -1,0 +1,199 @@
+---
+description: TraderMind 项目编码标准和最佳实践
+alwaysApply: true
+---
+
+# TraderMind 项目编码标准
+
+## 项目概述
+
+TraderMind 是一个专业的投资日志应用，集成 AI 交易教练功能。项目采用前后端分离架构：
+- **后端**: Java 21 + Spring Boot 3.2 + PostgreSQL
+- **前端**: Next.js 14 (App Router) + TypeScript + Tailwind CSS
+
+## 核心原则
+
+### 1. 金融计算精度
+- **后端**: 所有金额、价格计算必须使用 `BigDecimal`，避免浮点数精度丢失
+- **前端**: 金额显示时使用 `toFixed()` 或 `toLocaleString()` 格式化
+- 盈亏比、仓位计算等关键算法必须使用 `BigDecimal` 并指定精度和舍入模式
+
+```java
+// ✅ GOOD
+BigDecimal entryPrice = new BigDecimal("150.00");
+BigDecimal positionSize = riskAmount.divide(diff, 0, RoundingMode.DOWN);
+
+// ❌ BAD
+double entryPrice = 150.00;
+int positionSize = (int)(riskAmount / diff);
+```
+
+### 2. 纪律守门员
+- 盈亏比（RR）必须 >= 1.5，后端强制执行，前端仅作提示
+- A股市场限制：仅支持做多（LONG），不支持做空（SHORT）
+- 所有交易计划创建前必须通过纪律校验
+
+### 3. 代码注释
+- 所有公共方法、复杂业务逻辑必须添加中文注释
+- 使用 JSDoc 风格注释说明参数和返回值
+- 关键算法（仓位计算、盈亏比计算）必须注释公式
+
+```typescript
+/**
+ * 预计盈亏比
+ * RR = |TP - EP| / |EP - SL|
+ */
+const riskReward = useMemo(() => {
+  // ...
+}, [entryPrice, stopLoss, takeProfit]);
+```
+
+## 后端规范 (Java/Spring Boot)
+
+### 包结构
+```
+com.tradermind/
+├── controller/      # REST API 控制器，仅处理 HTTP 请求/响应
+├── service/         # 业务逻辑层，核心算法和业务规则
+├── repository/      # 数据访问层，JPA Repository
+├── entity/          # JPA 实体，数据库映射
+├── dto/             # 数据传输对象，API 请求/响应
+├── domain/          # 领域模型（枚举、值对象）
+└── exception/       # 自定义异常
+```
+
+### 命名约定
+- Controller: `*Controller`，使用 `@RestController` 和 `@RequestMapping`
+- Service: `*Service`，使用 `@Service` 和 `@RequiredArgsConstructor`
+- Repository: `*Repository`，继承 `JpaRepository`
+- Entity: 使用 `@Entity`，字段使用驼峰命名
+- DTO: 使用 `record` 或 `class`，字段名与 JSON 字段对应
+
+### 异常处理
+- 业务异常使用自定义异常 `DisciplineException`
+- 使用 `@ControllerAdvice` 全局异常处理
+- 返回统一的错误响应格式
+
+```java
+// ✅ GOOD
+if (rr.compareTo(MIN_RR) < 0) {
+    throw new DisciplineException("盈亏比必须 >= 1.5，当前为 " + rr);
+}
+```
+
+### 事务管理
+- 涉及数据库写操作的方法使用 `@Transactional`
+- 异步操作使用 `@Async`，不阻塞主流程
+
+## 前端规范 (Next.js/TypeScript)
+
+### 组件结构
+- 使用函数式组件和 Hooks
+- 组件文件使用 PascalCase: `TradeEntryModal.tsx`
+- 组件默认导出，Props 接口使用 `Props` 命名
+
+```typescript
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export default function TradeEntryModal({ open, onClose, onSuccess }: Props) {
+  // ...
+}
+```
+
+### 状态管理
+- 使用 `useState` 管理本地状态
+- 使用 SWR 进行数据获取和缓存
+- 表单状态使用受控组件模式
+
+### API 调用
+- 所有 API 调用封装在 `lib/api.ts`
+- 使用 TypeScript 接口定义请求/响应类型
+- 错误处理统一，抛出有意义的错误信息
+
+```typescript
+// ✅ GOOD
+export async function createTradePlan(payload: CreateTradePlanPayload) {
+  const res = await fetch(`${BASE_URL}/api/plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: "创建失败" }));
+    throw new Error(error.message || "创建失败");
+  }
+  return (await res.json()) as TradePlan;
+}
+```
+
+### 样式规范
+- 使用 Tailwind CSS 工具类
+- 深色主题：`bg-slate-900`, `text-slate-100`, `border-slate-700`
+- 强调色：`bg-emerald-500`（成功/主要操作），`text-rose-400`（风险/警告）
+- 响应式设计：使用 `sm:`, `md:` 等断点前缀
+
+### 常量定义
+- 业务常量定义在组件顶部或单独文件
+- 使用 `const` 和清晰的命名
+
+```typescript
+const TOTAL_CAPITAL = 1_000_000;
+const RISK_PERCENT = 0.01;
+const MIN_RR = 1.5;
+```
+
+## 核心算法
+
+### 仓位计算
+```
+positionSize = (TotalCapital * 0.01) / |entryPrice - stopLoss|
+```
+- 基于 1% 风险模型
+- 使用 `RoundingMode.DOWN` 向下取整
+- 返回整数仓位
+
+### 盈亏比计算
+```
+RR = |takeProfit - entryPrice| / |entryPrice - stopLoss|
+```
+- 必须 >= 1.5
+- 保留 4 位小数精度
+
+### 盈亏计算
+- 做多：`PnL = (exitPrice - entryPrice) * positionSize`
+- 做空：`PnL = (entryPrice - exitPrice) * positionSize`
+
+## 代码质量
+
+### 类型安全
+- TypeScript: 启用 `strict` 模式，避免使用 `any`
+- Java: 使用泛型，避免原始类型
+
+### 错误处理
+- 前端: 使用 try-catch 捕获异步错误，显示用户友好的错误信息
+- 后端: 使用全局异常处理器，返回统一的错误格式
+
+### 性能优化
+- 使用 `useMemo` 缓存计算结果（如盈亏比）
+- 使用 `useCallback` 缓存回调函数
+- API 调用使用 SWR 自动缓存和重新验证
+
+## 测试和验证
+
+### 关键功能测试点
+1. 仓位计算准确性（使用 BigDecimal）
+2. 盈亏比校验（必须 >= 1.5）
+3. 做空限制（A股仅支持做多）
+4. AI 分析异步执行（不阻塞平仓请求）
+
+## 注意事项
+
+1. **精度问题**: 所有金额计算必须使用 `BigDecimal`，避免精度丢失
+2. **纪律校验**: 盈亏比校验在后端强制执行，前端仅作提示
+3. **异步操作**: AI 分析是异步执行的，不会阻塞平仓请求
+4. **CORS**: 开发环境允许跨域，生产环境需配置具体域名
+5. **中文支持**: 所有用户可见文本和注释使用中文

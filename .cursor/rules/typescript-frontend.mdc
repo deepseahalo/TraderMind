@@ -1,0 +1,165 @@
+---
+description: TypeScript/React 前端编码规范
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript/React 前端编码规范
+
+## 组件结构
+- 使用函数式组件和 Hooks
+- Props 接口命名为 `Props`
+- 组件默认导出
+- 使用 `"use client"` 指令标记客户端组件
+
+```typescript
+// ✅ GOOD
+"use client";
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function TradeEntryModal({ open, onClose }: Props) {
+  // ...
+}
+```
+
+## 类型定义
+- 使用 TypeScript 接口定义类型
+- API 类型定义在 `lib/api.ts`
+- 避免使用 `any`，使用 `unknown` 或具体类型
+
+```typescript
+// ✅ GOOD
+export interface TradePlan {
+  id: number;
+  stockSymbol: string;
+  entryPrice: number;
+  // ...
+}
+
+// ❌ BAD
+const plan: any = await fetchPlan();
+```
+
+## 状态管理
+- 表单状态使用受控组件
+- 复杂状态使用 `useReducer`
+- 使用 `useMemo` 缓存计算结果
+- 使用 `useCallback` 缓存回调函数
+
+```typescript
+// ✅ GOOD
+const riskReward = useMemo(() => {
+  if (!entryPrice || !stopLoss || !takeProfit) return null;
+  const reward = Math.abs(takeProfit - entryPrice);
+  const risk = Math.abs(entryPrice - stopLoss);
+  return risk > 0 ? reward / risk : null;
+}, [entryPrice, stopLoss, takeProfit]);
+```
+
+## API 调用
+- 使用 SWR 进行数据获取
+- 错误处理统一，显示用户友好提示
+- 使用 TypeScript 类型断言确保类型安全
+
+```typescript
+// ✅ GOOD
+const { data, error, isLoading } = useSWR(
+  "active-trades-dashboard",
+  dashboardFetcher,
+  {
+    refreshInterval: 10_000,
+    revalidateOnFocus: true
+  }
+);
+
+if (error) {
+  return <div className="text-risk">加载失败</div>;
+}
+```
+
+## 表单处理
+- 使用受控组件模式
+- 表单验证在前端提示，后端强制执行
+- 提交时显示加载状态
+
+```typescript
+// ✅ GOOD
+const [form, setForm] = useState({
+  stockSymbol: "",
+  entryPrice: "",
+  // ...
+});
+
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setSubmitting(true);
+  try {
+    await createTradePlan(form);
+    onSuccess();
+  } catch (error) {
+    setError(error.message);
+  } finally {
+    setSubmitting(false);
+  }
+};
+```
+
+## 样式规范
+- 使用 Tailwind CSS 工具类
+- 深色主题配色：`bg-slate-900`, `text-slate-100`, `border-slate-700`
+- 响应式设计使用断点前缀：`sm:`, `md:`, `lg:`
+- 强调色：`bg-emerald-500`（成功），`text-rose-400`（警告）
+
+```typescript
+// ✅ GOOD
+<button className="rounded-lg bg-emerald-500 px-4 py-2 text-slate-900 hover:bg-emerald-400">
+  新建计划
+</button>
+```
+
+## 常量定义
+- 业务常量定义在组件顶部或单独文件
+- 使用清晰的命名和下划线分隔大数字
+
+```typescript
+// ✅ GOOD
+const TOTAL_CAPITAL = 1_000_000;
+const RISK_PERCENT = 0.01;
+const MIN_RR = 1.5;
+```
+
+## 错误处理
+- 异步操作使用 try-catch
+- 显示用户友好的错误信息
+- 错误状态使用视觉反馈（颜色、图标）
+
+```typescript
+// ✅ GOOD
+try {
+  await createTradePlan(payload);
+  setSuccess("创建成功");
+} catch (error) {
+  setError(error instanceof Error ? error.message : "创建失败");
+}
+```
+
+## 性能优化
+- 使用 `React.memo` 优化组件渲染
+- 使用 `useMemo` 缓存计算结果
+- 使用 `useCallback` 缓存事件处理函数
+- 列表渲染使用 `key` 属性
+
+```typescript
+// ✅ GOOD
+const handleClose = useCallback(() => {
+  onClose();
+}, [onClose]);
+
+const plans = useMemo(() => {
+  return data?.map(plan => ({ ...plan, pnl: calculatePnL(plan) })) || [];
+}, [data]);
+```
