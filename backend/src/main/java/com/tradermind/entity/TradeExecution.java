@@ -2,8 +2,10 @@ package com.tradermind.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * 交易执行记录：平仓时生成
@@ -35,9 +37,8 @@ public class TradeExecution {
     @Column(precision = 19, scale = 4)
     private BigDecimal realizedPnL;
 
-    // 卖出逻辑 / 心态记录
-    @Lob
-    @Column(nullable = false)
+    // 卖出逻辑 / 心态记录 - 使用 TEXT 避免 PostgreSQL Large Object 的自动提交限制
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String exitLogic;
 
     // 简要情绪状态标签，例如 "恐惧"、"贪婪"
@@ -47,7 +48,12 @@ public class TradeExecution {
     // AI 打分（0-100）
     private Integer aiAnalysisScore;
 
-    // AI 对本次交易的简短点评
-    @Lob
+    // AI 对本次交易的简短点评 - 使用 TEXT 避免 PostgreSQL Large Object 的自动提交限制
+    @Column(columnDefinition = "TEXT")
     private String aiAnalysisComment;
+
+    // 创建时间（平仓时间）
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 }

@@ -10,9 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
+import java.util.regex.Pattern;
 
 /**
  * AI 交易教练服务：
@@ -41,11 +43,17 @@ public class AIReviewService {
     /**
      * 平仓后异步复盘，不阻塞用户请求
      * 分析交易是否遵守纪律，是否有情绪化操作
+     * 注意：async 在独立线程运行，原事务已关闭。需在方法内重新加载实体，避免懒加载时 ResultSet 已关闭
      */
     @Async
+    @Transactional
     public void reviewTradeAsync(TradeExecution execution) {
+        Long executionId = execution.getId();
         try {
-            TradePlan plan = execution.getPlan();
+            // 在 async 线程内重新加载（JOIN FETCH plan），避免跨事务访问已关闭的懒加载
+            TradeExecution fresh = tradeExecutionRepository.findByIdWithPlan(executionId)
+                    .orElseThrow(() -> new IllegalArgumentException("未找到执行记录: " + executionId));
+            TradePlan plan = fresh.getPlan();
 
             String systemPrompt = """
                     你是一个严厉的职业交易教练。对比用户的初始计划和最终执行。
@@ -57,7 +65,7 @@ public class AIReviewService {
                     { "score": int, "comment": string }
                     """;
 
-            String userContent = buildUserContent(plan, execution);
+            String userContent = buildUserContent(plan, fresh);
 
             // 构建 OpenAI 风格的请求体
             JsonNode requestBody = objectMapper.createObjectNode()
@@ -89,20 +97,39 @@ public class AIReviewService {
                     .path("content")
                     .asText();
 
-            JsonNode aiResult = objectMapper.readTree(contentJson);
+            // AI 可能返回 markdown 代码块包裹的 JSON（```json ... ```），需剥离后再解析
+            String cleanJson = stripMarkdownJsonBlock(contentJson);
+
+            JsonNode aiResult = objectMapper.readTree(cleanJson);
 
             Integer score = aiResult.path("score").asInt();
             String comment = aiResult.path("comment").asText();
 
-            execution.setAiAnalysisScore(score);
-            execution.setAiAnalysisComment(comment);
-            tradeExecutionRepository.save(execution);
+            fresh.setAiAnalysisScore(score);
+            fresh.setAiAnalysisComment(comment);
+            tradeExecutionRepository.save(fresh);
 
-            log.info("AI 交易复盘完成，执行ID: {}, 评分: {}", execution.getId(), score);
+            log.info("AI 交易复盘完成，执行ID: {}, 评分: {}", executionId, score);
 
         } catch (Exception e) {
-            log.error("AI 交易复盘调用失败，执行ID: {}", execution.getId(), e);
+            log.error("AI 交易复盘调用失败，执行ID: {}", executionId, e);
         }
+    }
+
+    /**
+     * 剥离 AI 返回的 markdown 代码块包裹（```json ... ``` 或 ``` ... ```）
+     * 大模型常返回带格式的 JSON，直接解析会报 JsonParseException
+     */
+    private String stripMarkdownJsonBlock(String content) {
+        if (content == null) return "";
+        String s = content.strip();
+        // 匹配 ```json ... ``` 或 ``` ... ```
+        var pattern = Pattern.compile("^```(?:json)?\\s*\\n?(.*?)\\n?```\\s*$", Pattern.DOTALL);
+        var matcher = pattern.matcher(s);
+        if (matcher.matches()) {
+            return matcher.group(1).strip();
+        }
+        return s;
     }
 
     /**

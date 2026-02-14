@@ -1,11 +1,6 @@
 package com.tradermind.controller;
 
-import com.tradermind.dto.CloseTradeRequest;
-import com.tradermind.dto.CreateTradePlanRequest;
-import com.tradermind.dto.StockSearchResult;
-import com.tradermind.dto.TradeDashboardDTO;
-import com.tradermind.dto.TradeExecutionResponse;
-import com.tradermind.dto.TradePlanResponse;
+import com.tradermind.dto.*;
 import com.tradermind.service.StockMarketService;
 import com.tradermind.service.TradeService;
 import jakarta.validation.Valid;
@@ -42,6 +37,14 @@ public class TradeController {
     }
 
     /**
+     * 获取所有 PENDING 状态的计划（待成交）
+     */
+    @GetMapping("/pending")
+    public List<TradePlanResponse> getPendingPlans() {
+        return tradeService.getPendingPlans();
+    }
+
+    /**
      * 获取所有 OPEN 状态的持仓（基础版本）
      */
     @GetMapping("/active")
@@ -56,6 +59,91 @@ public class TradeController {
     @GetMapping("/active/dashboard")
     public List<TradeDashboardDTO> getActiveTradesDashboard() {
         return tradeService.getActiveTradesWithMarketData();
+    }
+
+    /**
+     * 获取历史交易记录（已平仓的交易）
+     * 按平仓时间倒序排列
+     */
+    @GetMapping("/closed")
+    public List<TradeHistoryDTO> getTradeHistory() {
+        return tradeService.getTradeHistory();
+    }
+
+    /**
+     * 为历史交易触发 AI 分析
+     * 异步执行，立即返回。适用于平仓时 AI 分析失败或历史数据无分析记录的场景
+     */
+    @PostMapping("/closed/{executionId}/review")
+    public Map<String, Object> triggerAiReviewForHistory(@PathVariable("executionId") Long executionId) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            tradeService.triggerAiReviewForExecution(executionId);
+            result.put("success", true);
+            result.put("message", "AI 分析已触发，请稍后刷新查看结果");
+        } catch (IllegalArgumentException e) {
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * 首次建仓：将 PENDING 计划转为 OPEN 持仓
+     */
+    @PostMapping("/{id}/execute")
+    public TradePlanResponse executePlan(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody ExecutePlanRequest request
+    ) {
+        return tradeService.executePlan(id, request);
+    }
+
+    /**
+     * 加仓：在 OPEN 持仓上增加数量，重新计算加权平均价
+     */
+    @PostMapping("/{id}/add")
+    public TradePlanResponse addPosition(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody AddPositionRequest request
+    ) {
+        return tradeService.addPosition(id, request);
+    }
+
+    /**
+     * 减仓：部分卖出，落袋盈亏，可同步更新剩余仓位的止损/止盈
+     */
+    @PostMapping("/{id}/trim")
+    public TradePlanResponse trimPosition(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody TrimPositionRequest request
+    ) {
+        return tradeService.executePartialExit(id, request);
+    }
+
+    /**
+     * 撤单：将 PENDING 计划改为 CANCELLED
+     */
+    @PostMapping("/{id}/cancel")
+    public Map<String, Object> cancelPlan(@PathVariable("id") Long id) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            tradeService.cancelPlan(id);
+            result.put("success", true);
+            result.put("message", "计划已取消");
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("message", e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * 获取计划的所有交易流水
+     */
+    @GetMapping("/{id}/transactions")
+    public List<TradeTransactionDTO> getPlanTransactions(@PathVariable("id") Long id) {
+        return tradeService.getTransactionsByPlanId(id);
     }
 
     /**

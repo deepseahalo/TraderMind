@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import ActivePositionsCard from "@/components/ActivePositionsCard";
+import HistoryTradesCard from "@/components/HistoryTradesCard";
 import TradeEntryModal from "@/components/TradeEntryModal";
+import TypewriterSlogan from "@/components/TypewriterSlogan";
 
 export default function HomePage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<"positions" | "history">("positions");
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
+
+  // 支持 ?openPlan=1 & ?tab=history 用于截图等场景
+  useEffect(() => {
+    if (searchParams.get("openPlan") === "1") setTradeModalOpen(true);
+    if (searchParams.get("tab") === "history") setActiveTab("history");
+  }, [searchParams]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleTradeSuccess = () => {
@@ -17,6 +27,11 @@ export default function HomePage() {
   return (
     <>
       <main className="space-y-4 pb-6">
+        {/* 仪表盘 Slogan */}
+        <div>
+          <TypewriterSlogan />
+        </div>
+
         {/* 标签页和新建按钮 */}
         <div className="flex items-center justify-between mb-4">
           {/* 标签页 */}
@@ -58,10 +73,7 @@ export default function HomePage() {
           {activeTab === "positions" ? (
             <ActivePositionsCard key={refreshKey} />
           ) : (
-            <div className="text-sm text-slate-500 text-center py-12">
-              <div className="mb-2">历史交易功能开发中</div>
-              <div className="text-xs text-slate-600">即将推出...</div>
-            </div>
+            <HistoryTradesCard />
           )}
         </div>
       </main>

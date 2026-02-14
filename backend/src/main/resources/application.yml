@@ -1,6 +1,11 @@
 spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true  # 当 schema 已有表但无 flyway_schema_history 时，自动 baseline 并创建历史表
   datasource:
-    url: jdbc:postgresql://localhost:5432/tradermind
+    # stringtype=unspecified 与 defaultAutoCommit=false 避免 PostgreSQL 大对象在自动提交模式下报错
+    url: jdbc:postgresql://localhost:5432/tradermind?stringtype=unspecified&defaultAutoCommit=false
     username: tradermind
     password: tradermind
     driver-class-name: org.postgresql.Driver
@@ -27,12 +32,13 @@ server:
   port: 8080
   address: 0.0.0.0  # 监听所有网络接口，允许局域网访问
 
-# AI API 配置（OpenAI 或 Dify）
+# AI API 配置（DeepSeek，兼容 OpenAI 格式）
+# 建议生产环境使用环境变量: DEEPSEEK_API_KEY
 ai:
   api:
-    url: https://api.openai.com/v1/chat/completions
-    key: YOUR_API_KEY_HERE
-  model: gpt-4.1-mini
+    url: https://api.deepseek.com/v1/chat/completions
+    key: ${DEEPSEEK_API_KEY:sk-64d9ff17b24e4e5f8a10c5e5db70908f}
+  model: deepseek-chat
 
 logging:
   level:

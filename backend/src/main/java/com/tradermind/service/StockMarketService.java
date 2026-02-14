@@ -348,69 +348,9 @@ public class StockMarketService {
             return results;
         }
         
-        // 方法3：使用基于代码范围的搜索（当 API 不可用时的备用方案）
-        log.info("外部 API 搜索失败，使用代码范围搜索");
-        results = searchByCodeRange(trimmed);
-        if (!results.isEmpty()) {
-            log.info("使用代码范围搜索成功，找到 {} 个结果", results.size());
-            return results;
-        }
-        
-        // 方法4：尝试东方财富 API（最后备用）
-        log.info("代码范围搜索未找到结果，尝试东方财富 API");
+        // 方法3：尝试东方财富 API（最后备用）
+        log.info("外部 API 搜索未找到结果，尝试东方财富 API");
         results = trySearchStocks(trimmed, 14);
-        
-        return results;
-    }
-    
-    /**
-     * 基于股票代码范围的搜索（当外部 API 不可用时的备用方案）
-     * 通过遍历常见的股票代码范围来查找匹配的股票
-     */
-    private List<StockInfo> searchByCodeRange(String keyword) {
-        List<StockInfo> results = new ArrayList<>();
-        String lowerKeyword = keyword.toLowerCase();
-        
-        // 如果输入的是数字，尝试作为代码搜索
-        if (keyword.matches("^\\d+$")) {
-            // 尝试常见的代码范围
-            String[] prefixes = {"600", "601", "603", "605", "000", "001", "002", "300"};
-            for (String prefix : prefixes) {
-                if (keyword.startsWith(prefix) || prefix.startsWith(keyword)) {
-                    // 尝试生成可能的代码
-                    for (int i = 0; i < 100 && results.size() < 10; i++) {
-                        String code = String.format("%s%03d", prefix, i);
-                        if (code.length() == 6) {
-                            StockInfo info = getStockInfo(code);
-                            if (info != null && info.getName().toLowerCase().contains(lowerKeyword)) {
-                                results.add(info);
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            // 按名称搜索：遍历常见的股票代码范围
-            // 沪市：600000-605999
-            for (int code = 600000; code <= 601999 && results.size() < 10; code++) {
-                StockInfo info = getStockInfo(String.valueOf(code));
-                if (info != null && info.getName().contains(keyword)) {
-                    results.add(info);
-                }
-            }
-            
-            // 如果还没找到足够的，继续搜索其他范围
-            if (results.size() < 10) {
-                // 深市主板：000001-002999
-                for (int code = 1; code <= 2999 && results.size() < 10; code++) {
-                    String codeStr = String.format("%06d", code);
-                    StockInfo info = getStockInfo(codeStr);
-                    if (info != null && info.getName().contains(keyword)) {
-                        results.add(info);
-                    }
-                }
-            }
-        }
         
         return results;
     }

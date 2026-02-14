@@ -1,13 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TradePlan, closePlan } from "@/lib/api";
+import { motion, AnimatePresence } from "framer-motion";
+
+/** 完美执行阈值：执行偏差 < 1% */
+const PERFECT_DEVIANCE_THRESHOLD = 0.01;
 
 interface Props {
   plan: TradePlan | null;
   open: boolean;
   onClose: () => void;
   onSubmitted: () => void;
+}
+
+/**
+ * 计算是否为完美执行
+ * PlanPrice: 盈利时为目标止盈价，亏损时为目标止损价
+ * 完美执行 = |ExitPrice - PlanPrice| / PlanPrice < 1%
+ */
+function isPerfectExecution(
+  exitPrice: number,
+  entryPrice: number,
+  stopLoss: number,
+  takeProfit: number
+): boolean {
+  const isProfit = exitPrice >= entryPrice;
+  const planPrice = isProfit ? takeProfit : stopLoss;
+  if (planPrice === 0) return false;
+  const deviance = Math.abs(exitPrice - planPrice);
+  const deviancePercent = deviance / planPrice;
+  return deviancePercent < PERFECT_DEVIANCE_THRESHOLD;
 }
 
 export default function ClosePositionModal({
@@ -21,22 +44,59 @@ export default function ClosePositionModal({
   const [emotion, setEmotion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPerfectToast, setShowPerfectToast] = useState(false);
+
+  // 弹窗打开时重置状态
+  useEffect(() => {
+    if (!open) {
+      setShowPerfectToast(false);
+    }
+  }, [open]);
 
   if (!open || !plan) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!exitPrice || !exitLogic) return;
+    const exitPriceNum = Number(exitPrice);
     setSubmitting(true);
     setError(null);
     try {
       await closePlan(plan.id, {
-        exitPrice: Number(exitPrice),
+        exitPrice: exitPriceNum,
         exitLogic,
         emotionalState: emotion || undefined
       });
-      onSubmitted();
-      onClose();
+
+      // 完美执行：显示 Confetti 和 Toast
+      const perfect = isPerfectExecution(
+        exitPriceNum,
+        plan.entryPrice,
+        plan.stopLoss,
+        plan.takeProfit
+      );
+
+      if (perfect) {
+        // 动态导入 confetti（避免 SSR 报错）
+        const confetti = (await import("canvas-confetti")).default;
+        confetti({
+          particleCount: 150,
+          spread: 100,
+          origin: { y: 0.6 },
+          colors: ["#10b981", "#fbbf24", "#f59e0b", "#ffffff"]
+        });
+        setShowPerfectToast(true);
+        // 完美执行：延迟关闭，让用户看到 Confetti 和 Toast
+        setTimeout(() => {
+          setShowPerfectToast(false);
+          onSubmitted();
+          onClose();
+        }, 2500);
+      } else {
+        onSubmitted();
+        onClose();
+      }
+
       setExitPrice("");
       setExitLogic("");
       setEmotion("");
@@ -49,16 +109,31 @@ export default function ClosePositionModal({
 
   return (
     <div className="fixed inset-0 z-30 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      {/* 完美执行 Toast：绿色/金色正向反馈，即使是亏损交易也给予纪律嘉奖 */}
+      <AnimatePresence mode="wait">
+        {showPerfectToast && (
+          <motion.div
+            key="perfect-toast"
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-4 rounded-xl bg-emerald-500/95 border border-emerald-400/50 shadow-lg shadow-emerald-500/30 flex items-center gap-2"
+          >
+            <span className="text-2xl">🛡️</span>
+            <span className="text-base font-semibold text-white">
+              完美执行！纪律分 +10
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="w-full max-w-md rounded-t-2xl sm:rounded-2xl border-t sm:border border-slate-700 bg-slate-900 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
         <h3 className="mb-4 text-lg font-semibold text-slate-100">
           平仓 - {plan.stockSymbol}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-800/50 p-3 text-sm">
-            <div>
-              <span className="text-slate-500">方向</span>
-              <div className="mt-0.5 font-medium">{plan.direction === "LONG" ? "做多" : "做空"}</div>
-            </div>
             <div>
               <span className="text-slate-500">开仓价</span>
               <div className="mt-0.5 font-mono font-medium">{plan.entryPrice}</div>

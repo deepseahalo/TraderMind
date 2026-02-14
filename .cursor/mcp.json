@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "postgresql": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://tradermind:tradermind@localhost:5432/tradermind"
+      ]
+    }
+  }
+}

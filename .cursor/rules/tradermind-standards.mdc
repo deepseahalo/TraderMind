@@ -155,6 +155,7 @@ positionSize = (TotalCapital * 0.01) / |entryPrice - stopLoss|
 - 基于 1% 风险模型
 - 使用 `RoundingMode.DOWN` 向下取整
 - 返回整数仓位
+- **A股规则**：买入股数必须为正100股（一手）的整数倍，计算结果向下取整到100的整数倍，最小100股
 
 ### 盈亏比计算
 ```
