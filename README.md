@@ -74,9 +74,12 @@ TraderMind/
 
 3. 配置 `backend/src/main/resources/application.yml`：
    - 修改数据库连接信息
-   - 配置 AI API Key（OpenAI 或 Dify）
 
-4. 启动后端：
+4. 配置 DeepSeek API Key（二选一）：
+   - 环境变量：`export DEEPSEEK_API_KEY=你的key`（Linux/Mac）或 `set DEEPSEEK_API_KEY=你的key`（Windows）
+   - 或创建 `backend/application-local.yml`（已 gitignore）：从 `application-local.yml.example` 复制并填入 key
+
+5. 启动后端：
    ```bash
    cd backend
    mvn spring-boot:run
