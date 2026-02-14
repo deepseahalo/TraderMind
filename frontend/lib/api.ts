@@ -1,25 +1,11 @@
-// 动态获取 API 基础 URL
-// 优先使用环境变量，否则根据当前访问地址自动检测
+// API 基础 URL
+// 默认空字符串 = 同源，由 next.config.js rewrites 转发到后端（适用于局域网、ngrok 等单端口暴露）
+// 若需直连后端，可设置 NEXT_PUBLIC_API_BASE_URL=http://host:8080
 function getBaseUrl(): string {
-  // 如果设置了环境变量，优先使用
   if (process.env.NEXT_PUBLIC_API_BASE_URL) {
     return process.env.NEXT_PUBLIC_API_BASE_URL;
   }
-  
-  // 在浏览器环境中，动态检测 hostname
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    // 如果是 localhost 或 127.0.0.1，使用 localhost:8080
-    // 否则使用相同的 hostname，端口改为 8080（适用于局域网访问）
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8080';
-    }
-    // 对于 IP 地址（如 192.168.x.x），使用相同的 IP 和 8080 端口
-    return `http://${hostname}:8080`;
-  }
-  
-  // 服务端渲染时默认使用 localhost
-  return 'http://localhost:8080';
+  return ""; // 同源，走 /api/* -> 后端 8080
 }
 
 const BASE_URL = getBaseUrl();

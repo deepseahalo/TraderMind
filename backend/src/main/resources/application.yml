@@ -39,7 +39,7 @@ server:
 ai:
   api:
     url: https://api.deepseek.com/v1/chat/completions
-    key: ${DEEPSEEK_API_KEY:}
+    key: sk-0440e44e10994060ad762f2abd19f4eb
   model: deepseek-chat
 
 logging:
